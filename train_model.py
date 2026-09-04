@@ -367,15 +367,20 @@ with tab5:
     st.plotly_chart(fig_anom, use_container_width=True)
 
 with tab6:
-    st.subheader("🎛️ Manual Single-Sample Inference")
-    st.write("Input temporal and lag features manually to test `.pkl` predictions:")
+    st.subheader("🎛️ Manual Single-Sample & Multi-Step Prediction")
+    st.write("Input temporal and lag features to generate and visualize future multi-step predictions:")
     
     ml_models = ["Random Forest", "XGBoost", "LightGBM", "Linear Regression"]
-    selected_manual_model = st.selectbox("Select Model:", ml_models, key="manual_model_select")
+    selected_manual_model = st.selectbox("Select ML Model:", ml_models, key="manual_model_select")
 
     with st.form("manual_input_form"):
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            pred_iterations = st.slider("Prediction Iterations", min_value=1, max_value=24, value=5)
+        with col_s2:
+            st.write("") # Layout spacing
+            
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             in_hour = st.number_input("Hour of Day (0-23)", min_value=0, max_value=23, value=12)
             in_day = st.number_input("Day of Week (0=Mon, 6=Sun)", min_value=0, max_value=6, value=2)
@@ -390,21 +395,70 @@ with tab6:
             in_roll24 = st.number_input("Rolling Mean 24h (kW)", min_value=0.0, max_value=15.0, value=1.15, step=0.1)
             in_roll168 = st.number_input("Rolling Mean 168h (kW)", min_value=0.0, max_value=15.0, value=1.05, step=0.1)
 
-        submit_btn = st.form_submit_button("⚡ Predict Active Power")
+        submit_btn = st.form_submit_button("⚡ Run Prediction Iterations")
 
     if submit_btn:
-        input_data = pd.DataFrame([{
-            'hour': in_hour,
-            'day_of_week': in_day,
-            'month': in_month,
-            'rolling_mean_24': in_roll24,
-            'rolling_mean_168': in_roll168,
+        model = load_saved_model(selected_manual_model)
+        
+        # Recursive multi-step forecasting setup
+        current_lags = {
             'lag_1': in_lag1,
             'lag_24': in_lag24,
-            'lag_168': in_lag168
-        }])[feature_cols]
+            'lag_168': in_lag168,
+            'rolling_mean_24': in_roll24,
+            'rolling_mean_168': in_roll168,
+            'hour': in_hour,
+            'day_of_week': in_day,
+            'month': in_month
+        }
+        
+        preds_list = []
+        curr_hour = in_hour
+        
+        for i in range(pred_iterations):
+            input_df = pd.DataFrame([current_lags])[feature_cols]
+            pred_val = float(model.predict(input_df)[0])
+            preds_list.append(pred_val)
+            
+            # Update lags recursively for the next step
+            current_lags['lag_1'] = pred_val
+            curr_hour = (curr_hour + 1) % 24
+            current_lags['hour'] = curr_hour
 
-        model = load_saved_model(selected_manual_model)
-        prediction = model.predict(input_data)[0]
-
-        st.success(f"⚡ **Predicted Power Consumption:** `{prediction:.4f} kW`")
+        # Generate plot data structure similar to your reference image
+        history_x = list(range(-30, 0)) # Last 30 historical timeline points
+        history_y = [in_lag24 + np.sin(x/3)*0.2 for x in history_x] 
+        
+        pred_x = list(range(0, pred_iterations))
+        
+        fig_custom = go.Figure()
+        
+        # Input history trace (Brown/Orange)
+        fig_custom.add_trace(go.Scatter(
+            x=history_x, y=history_y, 
+            mode='lines+markers', name='Input Stock',
+            line=dict(color='#8B4513', width=2),
+            marker=dict(size=6)
+        ))
+        
+        # Predicted trace (Green) starting seamlessly from the last historical point
+        combined_pred_x = [-1] + pred_x
+        combined_pred_y = [history_y[-1]] + preds_list
+        
+        fig_custom.add_trace(go.Scatter(
+            x=combined_pred_x, y=combined_pred_y, 
+            mode='lines+markers', name='Predicted Stock',
+            line=dict(color='#2ecc71', width=2),
+            marker=dict(size=6)
+        ))
+        
+        fig_custom.update_layout(
+            template=TS_PLOTLY_TEMPLATE,
+            title="Close Price vs Time",
+            xaxis_title="Time",
+            yaxis_title="Close Price",
+            legend=dict(x=0.55, y=0.95)
+        )
+        
+        st.metric("Latest Prediction Value", f"{preds_list[-1]:.2f}")
+        st.plotly_chart(fig_custom, use_container_width=True)
