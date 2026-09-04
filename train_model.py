@@ -395,9 +395,9 @@ with tab6:
             in_roll24 = st.number_input("Rolling Mean 24h (kW)", min_value=0.0, max_value=15.0, value=1.15, step=0.1)
             in_roll168 = st.number_input("Rolling Mean 168h (kW)", min_value=0.0, max_value=15.0, value=1.05, step=0.1)
 
+        submit_btn = st.form_submit_button("⚡ Run Prediction Iterations")
 
-
-    if 1:
+    if submit_btn:
         model = load_saved_model(selected_manual_model)
         
         # Recursive multi-step forecasting setup
