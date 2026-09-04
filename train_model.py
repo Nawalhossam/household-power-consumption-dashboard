@@ -315,7 +315,7 @@ with tab3:
 
 with tab4:
     st.subheader("🏆 Model Leaderboard")
-    if st.button("Evaluate All Models"):
+    if 1:
         with st.spinner("Benchmarking time series models..."):
             p_lr = load_saved_model("Linear Regression").predict(X_test)
             p_rf = load_saved_model("Random Forest").predict(X_test)
