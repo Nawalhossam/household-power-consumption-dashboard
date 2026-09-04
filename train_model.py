@@ -281,7 +281,7 @@ with tab2:
 
 with tab3:
     st.subheader(f"Inference Pipeline: {model_choice}")
-    if st.button("Run Forecast Simulation"):
+    if 1:
         with st.spinner("Calculating time series forecast..."):
             if model_choice in MODEL_FILE_MAP:
                 model = load_saved_model(model_choice)
